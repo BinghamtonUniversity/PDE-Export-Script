@@ -10,10 +10,11 @@ library(knitr)
 library(kableExtra)
 library(gt)
 
-dd
+
 tryCatch({
+  readRenviron("//bushare.binghamton.edu/assess/Shiny Apps/.Renviron.R")
   today <- format(Sys.Date(), "%Y-%m-%d")
-  output_path <- paste0("Z:/Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/Dumps/PDE_R_", today, ".xlsx")
+  output_path <- paste0("//bushare.binghamton.edu/assess/Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/Dumps/PDE_R_", today, ".xlsx")
   
   # ---- DB Connection ----
   con <- odbcConnect(dsn = "ODSPROD", uid = Sys.getenv("ods_userid"), pwd = Sys.getenv("ods_pwd"))
@@ -343,8 +344,13 @@ tryCatch({
     from = "mjacob28@binghamton.edu",
     to = c("mjacob28@binghamton.edu", 'ewalsh@binghamton.edu'),
     subject = paste("✅ PDE Export Success:", Sys.Date()),
-    credentials = creds_file("Z:/Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/gmail_creds")
-  )
+    credentials = creds_envvar(
+      host = Sys.getenv("SMTP_SERVER"),   # ✅ This gets the actual hostname
+      user = Sys.getenv("SMTP_USER"),
+      pass_envvar = "SMTP_PASS",          # ✅ This stays quoted — it's the name of the env var
+      port = 465,
+      use_ssl = TRUE
+    )
   
   close(con)
   dbDisconnect(conn)
@@ -369,6 +375,12 @@ tryCatch({
     from = "mjacob28@binghamton.edu",
     to = c("mjacob28@binghamton.edu","ewalsh@binghamton.edu"),
     subject = paste("❌ PDE Export Failed:", Sys.Date()),
-    credentials = creds_file("Z:/Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/gmail_creds")
+    credentials = creds_envvar(
+      host = Sys.getenv("SMTP_SERVER"),   # ✅ This gets the actual hostname
+      user = Sys.getenv("SMTP_USER"),
+      pass_envvar = "SMTP_PASS",          # ✅ This stays quoted — it's the name of the env var
+      port = 465,
+      use_ssl = TRUE
+    )
   )
 })
