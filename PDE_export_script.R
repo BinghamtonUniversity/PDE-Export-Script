@@ -350,7 +350,7 @@ tryCatch({
       pass_envvar = "SMTP_PASS",          # ✅ This stays quoted — it's the name of the env var
       port = 465,
       use_ssl = TRUE
-    )
+    ))
   
   close(con)
   dbDisconnect(conn)
