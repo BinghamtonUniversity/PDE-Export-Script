@@ -9,13 +9,16 @@ library(writexl)
 library(knitr)
 library(kableExtra)
 library(gt)
-
+library(pins)
 
 tryCatch({
   readRenviron("//bushare.binghamton.edu/assess/Shiny Apps/.Renviron.R")
   today <- format(Sys.Date(), "%Y-%m-%d")
   output_path <- paste0("//bushare.binghamton.edu/assess/Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/Dumps/PDE_R_", today, ".xlsx")
   
+  
+  # ---- PINS Connection ----
+  board <- pins::board_connect()
   # ---- DB Connection ----
   con <- odbcConnect(dsn = "ODSPROD", uid = Sys.getenv("ods_userid"), pwd = Sys.getenv("ods_pwd"))
   conn <- dbConnect(odbc::odbc(), dsn = "ODSPROD", UID = Sys.getenv("ods_userid"), PWD = Sys.getenv("ods_pwd"))
@@ -268,7 +271,7 @@ tryCatch({
     AND t1.ADDRESS_TYPE = 'CA'
     AND t2.PRIMARY_PROGRAM_IND = 'Y'
     AND t2.OFFICIALLY_ENROLLED = 'Y'
-    AND (t1.ADDRESS_END_DATE > SYSDATE OR t1.ADDRESS_END_DATE IS NULL)
+    AND (t1.ADDRESS_END_DATE = DATE '2025-12-13')
   ")
   
   ALL <- WORK.RACE %>%
@@ -298,6 +301,15 @@ tryCatch({
     )
 
   write_xlsx(PDE, output_path)
+  
+  #--- Write to board ---
+  pins::pin_write(board,
+                  x = PDE,
+                  name = "PDE_pin",
+                  type = "rds",
+                  title = "Latest PDE Dump",
+                  description = paste("Updated on", Sys.time())
+                  )
   
   # ---- Success Email ----
   # ---- Summary Table as HTML ----
