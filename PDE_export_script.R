@@ -15,10 +15,15 @@ tryCatch({
   readRenviron("//bushare.binghamton.edu/assess/Shiny Apps/.Renviron.R")
   today <- format(Sys.Date(), "%Y-%m-%d")
   output_path <- paste0("//bushare.binghamton.edu/assess/Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/Dumps/PDE_R_", today, ".xlsx")
-  
+  output_path2 <- paste0("//bushare.binghamton.edu/assess/Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/Dumps_RDS/PDE_R_", today, ".rds") 
   
   # ---- PINS Connection ----
-  board <- pins::board_connect()
+  pin_path <- "//bushare.binghamton.edu/assess/Data Hub/PDE_APP/Data"
+  
+  board <- board_folder(
+    path      = pin_path,
+    versioned = TRUE
+  )
   # ---- DB Connection ----
   con <- odbcConnect(dsn = "ODSPROD", uid = Sys.getenv("ods_userid"), pwd = Sys.getenv("ods_pwd"))
   conn <- dbConnect(odbc::odbc(), dsn = "ODSPROD", UID = Sys.getenv("ods_userid"), PWD = Sys.getenv("ods_pwd"))
@@ -47,7 +52,7 @@ tryCatch({
       t1.DEPARTMENT_DESC,
       t1.PROGRAM_LEVEL
   FROM ODSMGR.STUDENT_BU t1
-  WHERE t1.ACADEMIC_PERIOD = 202590
+  WHERE t1.ACADEMIC_PERIOD = 202620
       AND t1.PRIMARY_PROGRAM_IND = 'Y'
       AND t1.OFFICIALLY_ENROLLED = 'Y'
   ORDER BY t1.ID_NUMBER
@@ -68,7 +73,7 @@ tryCatch({
     t1.EMAIL_CODE = 'UNIV'
     AND t1.EMAIL_ADDRESS LIKE '%@binghamton.edu' 
     AND t1.PREFERRED_IND = 'Y'
-    AND t2.ACADEMIC_PERIOD = 202590
+    AND t2.ACADEMIC_PERIOD = 202620
     AND t2.PRIMARY_PROGRAM_IND = 'Y'
     AND t2.OFFICIALLY_ENROLLED = 'Y'
   "
@@ -91,7 +96,7 @@ tryCatch({
       AND t1.EMAIL_ADDRESS LIKE '%@binghamton.edu%'
       AND t1.EMAIL_COMMENT = 'Created because error not in ID MGT'
       AND REGEXP_LIKE(t1.EMAIL_ADDRESS, '[[:digit:]]')
-      AND t2.ACADEMIC_PERIOD = 202590
+      AND t2.ACADEMIC_PERIOD = 202620
       AND t2.PRIMARY_PROGRAM_IND = 'Y'
       AND t2.OFFICIALLY_ENROLLED = 'Y'
     ORDER BY 
@@ -138,7 +143,7 @@ tryCatch({
     WHERE 
       t1.GPA_TYPE = 'I'
       AND t1.GPA_GROUPING = 'C'
-      AND t2.ACADEMIC_PERIOD = 202590
+      AND t2.ACADEMIC_PERIOD = 202620
       AND t2.PRIMARY_PROGRAM_IND = 'Y'
       AND t2.OFFICIALLY_ENROLLED = 'Y'
     ORDER BY 
@@ -197,7 +202,7 @@ tryCatch({
     LEFT JOIN ODSMGR.STUDENT_BU t2
       ON t1.PERSON_UID = t2.PERSON_UID
       AND t1.ACADEMIC_PERIOD = t2.ACADEMIC_PERIOD
-    WHERE t1.ACADEMIC_PERIOD = 202590
+    WHERE t1.ACADEMIC_PERIOD = 202620
       AND t2.PRIMARY_PROGRAM_IND = 'Y'
       AND t2.OFFICIALLY_ENROLLED = 'Y'
       AND t1.COHORT != 'EXCELRECP'
@@ -216,7 +221,7 @@ tryCatch({
     FROM ODSMGR.PERSON_DETAIL_BU t1
     LEFT JOIN ODSMGR.STUDENT_BU t2
     ON t1.PERSON_UID = t2.PERSON_UID
-    WHERE t2.ACADEMIC_PERIOD = 202590
+    WHERE t2.ACADEMIC_PERIOD = 202620
     AND t2.PRIMARY_PROGRAM_IND = 'Y'
     AND t2.OFFICIALLY_ENROLLED = 'Y'
   ")
@@ -244,7 +249,7 @@ tryCatch({
     FROM ODSMGR.PERSON_SENSITIVE_IPEDS_BU t1
     LEFT JOIN ODSMGR.STUDENT_BU t2
     ON t1.PERSON_UID = t2.PERSON_UID
-    WHERE t2.ACADEMIC_PERIOD = 202590
+    WHERE t2.ACADEMIC_PERIOD = 202620
     AND t2.PRIMARY_PROGRAM_IND = 'Y'
     AND t2.OFFICIALLY_ENROLLED = 'Y'
   ")
@@ -267,11 +272,11 @@ tryCatch({
     FROM ODSMGR.ADDRESS t1
     LEFT JOIN ODSMGR.STUDENT_BU t2
     ON t1.ENTITY_UID = t2.PERSON_UID
-    WHERE t2.ACADEMIC_PERIOD = 202590
+    WHERE t2.ACADEMIC_PERIOD = 202620
     AND t1.ADDRESS_TYPE = 'CA'
     AND t2.PRIMARY_PROGRAM_IND = 'Y'
     AND t2.OFFICIALLY_ENROLLED = 'Y'
-    AND (t1.ADDRESS_END_DATE = DATE '2025-12-13')
+    AND (t1.ADDRESS_END_DATE = DATE '2026-05-16')
   ")
   
   ALL <- WORK.RACE %>%
@@ -301,6 +306,7 @@ tryCatch({
     )
 
   write_xlsx(PDE, output_path)
+  saveRDS(PDE, output_path2)
   
   #--- Write to board ---
   pins::pin_write(board,
@@ -344,7 +350,7 @@ tryCatch({
       "<p>✅ PDE export completed successfully on ", Sys.Date(), ".</p>",
       "<p><strong>Output file:</strong><br>", output_path, "</p>",
       summary_html,
-      "<p><strong>View Full Shiny App:</strong><br>", " Z:/Shared SAASI/Matthew/PDE Shiny App/R Scripts </a></p>"
+      "<p><strong>View Full Shiny App:</strong><br>", " Z:/Data Hub/PDE_APP </a></p>"
     )),
     footer = "— Automated PDE Script"
   )
@@ -354,8 +360,8 @@ tryCatch({
   smtp_send(
     email,
     from = "mjacob28@binghamton.edu",
-    to = c("mjacob28@binghamton.edu", 'ewalsh@binghamton.edu'),
-    subject = paste("✅ PDE Export Success:", Sys.Date()),
+    to = c("assess@binghamton.edu","bshabroski@binghamton.edu","mjacob28@binghamton.edu", 'ewalsh@binghamton.edu'),
+    subject = paste("✅ PDE Daily Dump Success:", Sys.Date()),
     credentials = creds_envvar(
       host = Sys.getenv("SMTP_SERVER"),   # ✅ This gets the actual hostname
       user = Sys.getenv("SMTP_USER"),
@@ -372,7 +378,7 @@ tryCatch({
   # ---- Failure Email ----
   error_email <- compose_email(
     body = md(paste0(
-      "❌ *PDE export failed on ", Sys.Date(), "*.\n\n",
+      "❌ *PDE Daily Dump failed on ", Sys.Date(), "*.\n\n",
       "**Expected output file:**  \n",
       output_path, "\n\n",
       "**Error message:**\n\n",
@@ -385,7 +391,7 @@ tryCatch({
   smtp_send(
     error_email,
     from = "mjacob28@binghamton.edu",
-    to = c("mjacob28@binghamton.edu","ewalsh@binghamton.edu"),
+    to = c("assess@binghamton.edu","bshabroski@binghamton.edu", "mjacob28@binghamton.edu","ewalsh@binghamton.edu"),
     subject = paste("❌ PDE Export Failed:", Sys.Date()),
     credentials = creds_envvar(
       host = Sys.getenv("SMTP_SERVER"),   # ✅ This gets the actual hostname
