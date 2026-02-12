@@ -22,7 +22,7 @@ resetPullResults()
 
 get_data_path <- function(relative_path) {
   if (.Platform$OS.type == "windows") {
-    base_path <- "Z:/"
+    base_path <- "//bushare.binghamton.edu/assess"
   } else {
     base_path <- "/mnt/assess/"
   }
@@ -35,7 +35,10 @@ today <- format(Sys.Date(), "%Y-%m-%d")
 envvar_path <- get_data_path("Shiny Apps/.Renviron.R")
 readRenviron(envvar_path)
 
-pin_path <- get_data_path("Data Hub/PDE_TEST_APP/Data")
+pin_path <- get_data_path("Data Hub/PDE_APP_SP2026/Data")
+
+dump_path_xlsx <- get_data_path(paste0("Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/Dumps/PDE_SP_2026_R_", today, ".xlsx"))
+dump_path_rds <- get_data_path(paste0("Shared SAASI/Banner Info/Periodic Data Exports/PDE - R Scripts/Dumps_RDS/PDE_SP_2026_R_", today, ".rds")) 
 
 board <- board_folder(
   path      = pin_path,
@@ -43,8 +46,8 @@ board <- board_folder(
 )
 
 academic_period <- 202620
-script_loc <- "PDE_TEST_APP/Migration/pdeExportPullR.R"
-end_loc <- "PDE_TEST_APP"
+script_loc <- "PDE_APP_SP2026/Migration/pdeExportPullR.R"
+end_loc <- "PDE_APP_SP2026"
 
 # ---- DB Connection ----
 con  <- odbcConnect(dsn = "ODSPROD", uid = Sys.getenv("ods_userid"), pwd = Sys.getenv("ods_pwd"))
@@ -68,16 +71,20 @@ ORDER BY t1.ID_NUMBER
 ")
 
 STUDENT_BU.df <- run_with_retries(
-  function() sqlQuery(con, STUDENT_BU_QUERY, errors = FALSE),
+  fun = function() {
+    sqlQuery(con, STUDENT_BU_QUERY, errors = FALSE)
+  },
   pull_name = "STUDENT_BU",
   script_loc = script_loc,
   end_loc = end_loc,
-  columns = c("PERSON_UID","ID_NUMBER","FIRST_NAME","LAST_NAME","STUDENT_CLASS_DESC_BOAP",
-              "ACADEMIC_PERIOD","ACADEMIC_PERIOD_DESC","ACADEMIC_PERIOD_ADMITTED",
-              "OFFICIALLY_ENROLLED","CONFIDENTIALITY_IND","DECEASED_STATUS",
-              "GENDER_IDENTITY_DESC","FED_REPORT_ETHNICITY_CAT_DESC","STUDENT_RESIDENCY_DESC",
-              "STUDENT_POPULATION_DESC","COLLEGE_DESC","MAJOR","MAJOR_DESC",
-              "DEPARTMENT_DESC","PROGRAM_LEVEL"),
+  columns = c(
+    "PERSON_UID","ID_NUMBER","FIRST_NAME","LAST_NAME","STUDENT_CLASS_DESC_BOAP",
+    "ACADEMIC_PERIOD","ACADEMIC_PERIOD_DESC","ACADEMIC_PERIOD_ADMITTED",
+    "OFFICIALLY_ENROLLED","CONFIDENTIALITY_IND","DECEASED_STATUS",
+    "GENDER_IDENTITY_DESC","FED_REPORT_ETHNICITY_CAT_DESC","STUDENT_RESIDENCY_DESC",
+    "STUDENT_POPULATION_DESC","COLLEGE_DESC","MAJOR","MAJOR_DESC",
+    "DEPARTMENT_DESC","PROGRAM_LEVEL"
+  ),
   affects = "pde",
   max_tries = 3
 )
@@ -86,17 +93,19 @@ STUDENT_BU.df <- run_with_retries(
 # 2. EMAIL_BU + EMAIL_BU_0000
 # =====================================
 EMAIL_BU.df <- run_with_retries(
-  function() sqlQuery(con, glue("
-SELECT t1.ENTITY_UID, t1.EMAIL_ADDRESS
-FROM ODSMGR.EMAIL_BU t1
-LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.ENTITY_UID = t2.PERSON_UID
-WHERE t1.EMAIL_CODE = 'UNIV'
-  AND t1.EMAIL_ADDRESS LIKE '%@binghamton.edu'
-  AND t1.PREFERRED_IND = 'Y'
-  AND t2.ACADEMIC_PERIOD = {academic_period}
-  AND t2.PRIMARY_PROGRAM_IND = 'Y'
-  AND t2.OFFICIALLY_ENROLLED = 'Y'
-"), errors = FALSE),
+  fun = function() {
+    sqlQuery(con, glue("
+      SELECT t1.ENTITY_UID, t1.EMAIL_ADDRESS
+      FROM ODSMGR.EMAIL_BU t1
+      LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.ENTITY_UID = t2.PERSON_UID
+      WHERE t1.EMAIL_CODE = 'UNIV'
+        AND t1.EMAIL_ADDRESS LIKE '%@binghamton.edu'
+        AND t1.PREFERRED_IND = 'Y'
+        AND t2.ACADEMIC_PERIOD = {academic_period}
+        AND t2.PRIMARY_PROGRAM_IND = 'Y'
+        AND t2.OFFICIALLY_ENROLLED = 'Y'
+    "), errors = FALSE)
+  },
   pull_name = "EMAIL_BU",
   script_loc = script_loc,
   end_loc = end_loc,
@@ -106,18 +115,20 @@ WHERE t1.EMAIL_CODE = 'UNIV'
 )
 
 EMAIL_BU_0000.df <- run_with_retries(
-  function() sqlQuery(con, glue("
-SELECT DISTINCT t1.ENTITY_UID, t1.EMAIL_ADDRESS
-FROM ODSMGR.EMAIL_BU t1
-LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.ENTITY_UID = t2.PERSON_UID
-WHERE t1.EMAIL_CODE = 'ERR'
-  AND t1.EMAIL_ADDRESS LIKE '%@binghamton.edu%'
-  AND t1.EMAIL_COMMENT = 'Created because error not in ID MGT'
-  AND REGEXP_LIKE(t1.EMAIL_ADDRESS, '[[:digit:]]')
-  AND t2.ACADEMIC_PERIOD = {academic_period}
-  AND t2.PRIMARY_PROGRAM_IND = 'Y'
-  AND t2.OFFICIALLY_ENROLLED = 'Y'
-"), errors = FALSE),
+  fun = function() {
+    sqlQuery(con, glue("
+      SELECT DISTINCT t1.ENTITY_UID, t1.EMAIL_ADDRESS
+      FROM ODSMGR.EMAIL_BU t1
+      LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.ENTITY_UID = t2.PERSON_UID
+      WHERE t1.EMAIL_CODE = 'ERR'
+        AND t1.EMAIL_ADDRESS LIKE '%@binghamton.edu%'
+        AND t1.EMAIL_COMMENT = 'Created because error not in ID MGT'
+        AND REGEXP_LIKE(t1.EMAIL_ADDRESS, '[[:digit:]]')
+        AND t2.ACADEMIC_PERIOD = {academic_period}
+        AND t2.PRIMARY_PROGRAM_IND = 'Y'
+        AND t2.OFFICIALLY_ENROLLED = 'Y'
+    "), errors = FALSE)
+  },
   pull_name = "EMAIL_BU_0000",
   script_loc = script_loc,
   end_loc = end_loc,
@@ -125,6 +136,7 @@ WHERE t1.EMAIL_CODE = 'ERR'
   affects = "pde",
   max_tries = 3
 )
+
 
 if (exists("STUDENT_BU.df") &&
     is.data.frame(STUDENT_BU.df) &&
@@ -147,28 +159,33 @@ if (exists("STUDENT_BU.df") &&
 # 3. GPA
 # =====================================
 GPA.df <- run_with_retries(
-  function() sqlQuery(con, glue("
-SELECT t1.PERSON_UID, t1.ID, t1.NAME, t1.ACADEMIC_STUDY_VALUE,
-       t1.QUALITY_POINTS AS CU_QUALITY_POINTS, t1.GPA_CREDITS AS CU_GPA_CREDITS,
-       t1.GPA AS CU_GPA, t2.STUDENT_CLASSIFICATION_BOAP
-FROM ODSMGR.GPA t1
-INNER JOIN ODSMGR.STUDENT_BU t2
-  ON t1.PERSON_UID = t2.PERSON_UID
- AND t1.ACADEMIC_STUDY_VALUE = t2.PROGRAM_LEVEL
-WHERE t1.GPA_TYPE = 'I'
-  AND t1.GPA_GROUPING = 'C'
-  AND t2.ACADEMIC_PERIOD = {academic_period}
-  AND t2.PRIMARY_PROGRAM_IND = 'Y'
-  AND t2.OFFICIALLY_ENROLLED = 'Y'
-"), errors = FALSE),
+  fun = function() {
+    sqlQuery(con, glue("
+      SELECT t1.PERSON_UID, t1.ID, t1.NAME, t1.ACADEMIC_STUDY_VALUE,
+             t1.QUALITY_POINTS AS CU_QUALITY_POINTS, t1.GPA_CREDITS AS CU_GPA_CREDITS,
+             t1.GPA AS CU_GPA, t2.STUDENT_CLASSIFICATION_BOAP
+      FROM ODSMGR.GPA t1
+      INNER JOIN ODSMGR.STUDENT_BU t2
+        ON t1.PERSON_UID = t2.PERSON_UID
+       AND t1.ACADEMIC_STUDY_VALUE = t2.PROGRAM_LEVEL
+      WHERE t1.GPA_TYPE = 'I'
+        AND t1.GPA_GROUPING = 'C'
+        AND t2.ACADEMIC_PERIOD = {academic_period}
+        AND t2.PRIMARY_PROGRAM_IND = 'Y'
+        AND t2.OFFICIALLY_ENROLLED = 'Y'
+    "), errors = FALSE)
+  },
   pull_name = "GPA",
   script_loc = script_loc,
   end_loc = end_loc,
-  columns = c("PERSON_UID","ID","NAME","ACADEMIC_STUDY_VALUE","CU_QUALITY_POINTS",
-              "CU_GPA_CREDITS","CU_GPA","STUDENT_CLASSIFICATION_BOAP"),
+  columns = c(
+    "PERSON_UID","ID","NAME","ACADEMIC_STUDY_VALUE","CU_QUALITY_POINTS",
+    "CU_GPA_CREDITS","CU_GPA","STUDENT_CLASSIFICATION_BOAP"
+  ),
   affects = "pde",
   max_tries = 3
 )
+
 
 if (exists("STUDENT_EMAILS") &&
     is.data.frame(STUDENT_EMAILS) &&
@@ -183,19 +200,21 @@ if (exists("STUDENT_EMAILS") &&
 # 4. EOP
 # =====================================
 EOP.df <- run_with_retries(
-  function() sqlQuery(con, "
-SELECT DISTINCT t1.PERSON_UID, t1.ID_NUMBER, t2.EOP_STATUS_DESCRIPTION
-FROM (
-  SELECT PERSON_UID, ID_NUMBER, MAX(EOP_STATUS_DATE) AS MAX_of_EOP_STATUS_DATE
-  FROM ODSMGR.EOP_BU
-  WHERE EOP_STATUS != '2'
-  GROUP BY PERSON_UID, ID_NUMBER
-) t1
-INNER JOIN ODSMGR.EOP_BU t2
-  ON t1.PERSON_UID = t2.PERSON_UID
- AND t1.MAX_of_EOP_STATUS_DATE = t2.EOP_STATUS_DATE
-WHERE t2.EOP_STATUS != '2'
-", errors = FALSE),
+  fun = function() {
+    sqlQuery(con, "
+      SELECT DISTINCT t1.PERSON_UID, t1.ID_NUMBER, t2.EOP_STATUS_DESCRIPTION
+      FROM (
+        SELECT PERSON_UID, ID_NUMBER, MAX(EOP_STATUS_DATE) AS MAX_of_EOP_STATUS_DATE
+        FROM ODSMGR.EOP_BU
+        WHERE EOP_STATUS != '2'
+        GROUP BY PERSON_UID, ID_NUMBER
+      ) t1
+      INNER JOIN ODSMGR.EOP_BU t2
+        ON t1.PERSON_UID = t2.PERSON_UID
+       AND t1.MAX_of_EOP_STATUS_DATE = t2.EOP_STATUS_DATE
+      WHERE t2.EOP_STATUS != '2'
+    ", errors = FALSE)
+  },
   pull_name = "EOP",
   script_loc = script_loc,
   end_loc = end_loc,
@@ -203,6 +222,7 @@ WHERE t2.EOP_STATUS != '2'
   affects = "pde",
   max_tries = 3
 )
+
 
 if (exists("WORK.CU_GPA_EMAILS") &&
     is.data.frame(WORK.CU_GPA_EMAILS) &&
@@ -219,17 +239,19 @@ if (exists("WORK.CU_GPA_EMAILS") &&
 # 5. COHORT
 # =====================================
 COHORT.df <- run_with_retries(
-  function() sqlQuery(con, glue("
-SELECT DISTINCT t1.PERSON_UID, t1.COHORT, t1.COHORT_DESC
-FROM ODSMGR.STUDENT_COHORT t1
-LEFT JOIN ODSMGR.STUDENT_BU t2
-  ON t1.PERSON_UID = t2.PERSON_UID
- AND t1.ACADEMIC_PERIOD = t2.ACADEMIC_PERIOD
-WHERE t1.ACADEMIC_PERIOD = {academic_period}
-  AND t2.PRIMARY_PROGRAM_IND = 'Y'
-  AND t2.OFFICIALLY_ENROLLED = 'Y'
-  AND t1.COHORT != 'EXCELRECP'
-"), errors = FALSE),
+  fun = function() {
+    sqlQuery(con, glue("
+      SELECT DISTINCT t1.PERSON_UID, t1.COHORT, t1.COHORT_DESC
+      FROM ODSMGR.STUDENT_COHORT t1
+      LEFT JOIN ODSMGR.STUDENT_BU t2
+        ON t1.PERSON_UID = t2.PERSON_UID
+       AND t1.ACADEMIC_PERIOD = t2.ACADEMIC_PERIOD
+      WHERE t1.ACADEMIC_PERIOD = {academic_period}
+        AND t2.PRIMARY_PROGRAM_IND = 'Y'
+        AND t2.OFFICIALLY_ENROLLED = 'Y'
+        AND t1.COHORT != 'EXCELRECP'
+    "), errors = FALSE)
+  },
   pull_name = "COHORT",
   script_loc = script_loc,
   end_loc = end_loc,
@@ -237,6 +259,7 @@ WHERE t1.ACADEMIC_PERIOD = {academic_period}
   affects = "pde",
   max_tries = 3
 )
+
 
 if (exists("WORK.CU_GPA_EMAILS") &&
     is.data.frame(WORK.CU_GPA_EMAILS) &&
@@ -251,15 +274,17 @@ if (exists("WORK.CU_GPA_EMAILS") &&
 # 6. PERSON_DETAIL
 # =====================================
 DETAIL.df <- run_with_retries(
-  function() sqlQuery(con, glue("
-SELECT DISTINCT t1.PERSON_UID, TO_CHAR(BIRTH_DATE, 'MM/DD/YYYY') AS DOB,
-       t1.FIRST_GENERATION_IND, t1.LEGAL_SEX_DESC
-FROM ODSMGR.PERSON_DETAIL_BU t1
-LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.PERSON_UID = t2.PERSON_UID
-WHERE t2.ACADEMIC_PERIOD = {academic_period}
-  AND t2.PRIMARY_PROGRAM_IND = 'Y'
-  AND t2.OFFICIALLY_ENROLLED = 'Y'
-"), errors = FALSE),
+  fun = function() {
+    sqlQuery(con, glue("
+      SELECT DISTINCT t1.PERSON_UID, TO_CHAR(BIRTH_DATE, 'MM/DD/YYYY') AS DOB,
+             t1.FIRST_GENERATION_IND, t1.LEGAL_SEX_DESC
+      FROM ODSMGR.PERSON_DETAIL_BU t1
+      LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.PERSON_UID = t2.PERSON_UID
+      WHERE t2.ACADEMIC_PERIOD = {academic_period}
+        AND t2.PRIMARY_PROGRAM_IND = 'Y'
+        AND t2.OFFICIALLY_ENROLLED = 'Y'
+    "), errors = FALSE)
+  },
   pull_name = "PERSON_DETAIL",
   script_loc = script_loc,
   end_loc = end_loc,
@@ -267,6 +292,7 @@ WHERE t2.ACADEMIC_PERIOD = {academic_period}
   affects = "pde",
   max_tries = 3
 )
+
 
 if (exists("WORK.CU_GPA_EMAILS_COHORT") &&
     is.data.frame(WORK.CU_GPA_EMAILS_COHORT) &&
@@ -281,14 +307,16 @@ if (exists("WORK.CU_GPA_EMAILS_COHORT") &&
 # 7. RACE + ADDRESS
 # =====================================
 RACE.df <- run_with_retries(
-  function() sqlQuery(con, glue("
-SELECT DISTINCT t1.PERSON_UID, t1.SUNY_RACE_ETHNICITY_CODE, t1.UNDERREPRESENTED_IND
-FROM ODSMGR.PERSON_SENSITIVE_IPEDS_BU t1
-LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.PERSON_UID = t2.PERSON_UID
-WHERE t2.ACADEMIC_PERIOD = {academic_period}
-  AND t2.PRIMARY_PROGRAM_IND = 'Y'
-  AND t2.OFFICIALLY_ENROLLED = 'Y'
-"), errors = FALSE),
+  fun = function() {
+    sqlQuery(con, glue("
+      SELECT DISTINCT t1.PERSON_UID, t1.SUNY_RACE_ETHNICITY_CODE, t1.UNDERREPRESENTED_IND
+      FROM ODSMGR.PERSON_SENSITIVE_IPEDS_BU t1
+      LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.PERSON_UID = t2.PERSON_UID
+      WHERE t2.ACADEMIC_PERIOD = {academic_period}
+        AND t2.PRIMARY_PROGRAM_IND = 'Y'
+        AND t2.OFFICIALLY_ENROLLED = 'Y'
+    "), errors = FALSE)
+  },
   pull_name = "RACE",
   script_loc = script_loc,
   end_loc = end_loc,
@@ -297,18 +325,21 @@ WHERE t2.ACADEMIC_PERIOD = {academic_period}
   max_tries = 3
 )
 
+
 ADDRESS.df <- run_with_retries(
-  function() sqlQuery(con, glue("
-SELECT DISTINCT t1.ENTITY_UID AS PERSON_UID, t1.STREET_LINE1, t1.STREET_LINE2,
-       t1.STREET_LINE3, t1.ADDRESS_TYPE
-FROM ODSMGR.ADDRESS t1
-LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.ENTITY_UID = t2.PERSON_UID
-WHERE t2.ACADEMIC_PERIOD = {academic_period}
-  AND t1.ADDRESS_TYPE = 'CA'
-  AND t2.PRIMARY_PROGRAM_IND = 'Y'
-  AND t2.OFFICIALLY_ENROLLED = 'Y'
-  AND t1.ADDRESS_END_DATE = DATE'2026-05-16'
-"), errors = FALSE),
+  fun = function() {
+    sqlQuery(con, glue("
+      SELECT DISTINCT t1.ENTITY_UID AS PERSON_UID, t1.STREET_LINE1, t1.STREET_LINE2,
+             t1.STREET_LINE3, t1.ADDRESS_TYPE
+      FROM ODSMGR.ADDRESS t1
+      LEFT JOIN ODSMGR.STUDENT_BU t2 ON t1.ENTITY_UID = t2.PERSON_UID
+      WHERE t2.ACADEMIC_PERIOD = {academic_period}
+        AND t1.ADDRESS_TYPE = 'CA'
+        AND t2.PRIMARY_PROGRAM_IND = 'Y'
+        AND t2.OFFICIALLY_ENROLLED = 'Y'
+        AND t1.ADDRESS_END_DATE = DATE'2026-05-16'
+    "), errors = FALSE)
+  },
   pull_name = "ADDRESS",
   script_loc = script_loc,
   end_loc = end_loc,
@@ -316,6 +347,7 @@ WHERE t2.ACADEMIC_PERIOD = {academic_period}
   affects = "pde",
   max_tries = 3
 )
+
 
 if (exists("WORK.BIRTH") &&
     is.data.frame(WORK.BIRTH) &&
@@ -353,6 +385,9 @@ if (exists("ALL") && is.data.frame(ALL) && nrow(ALL) > 0) {
       ACADEMIC_STUDY_VALUE, CU_GPA, HOUSING_TYPE, COMMUNITY, HALL, ROOM
     )
   
+  write_xlsx(PDE, dump_path_xlsx)
+  saveRDS(PDE, dump_path_rds)
+  
   pin_write(board, PDE, name = "PDE_Pin")
   
 }
@@ -360,6 +395,96 @@ if (exists("ALL") && is.data.frame(ALL) && nrow(ALL) > 0) {
 PR_PATH <- get_data_path("Data Hub/Data_Pull_Overview_App/Data/pull_results/PDE_PR.rds")
 dir.create(dirname(PR_PATH), recursive = TRUE, showWarnings = FALSE)
 saveRDS(pull_results, PR_PATH)
+
+all_success <- pull_results %>%
+  summarise(all_ok = all(success)) %>%
+  pull(all_ok)
+
+if (!all_success) {
+  
+  failed <- pull_results %>% filter(!success)
+  
+  error_table <- failed %>%
+    transmute(
+      Pull = pull_name,
+      Error = ifelse(lengths(error_msg) == 0, "Unknown error", error_msg)
+    )
+  
+  error_html <- error_table %>%
+    kableExtra::kbl("html") %>%
+    kableExtra::kable_styling(full_width = FALSE) %>%
+    as.character()
+  
+  error_email <- compose_email(
+    body = html(paste0(
+      "<p>❌ <strong>PDE export failed on ", Sys.Date(), "</strong></p>",
+      "<p><strong>Expected output:</strong><br>", pin_path, "</p>",
+      "<p><strong>Failed steps:</strong></p>",
+      error_html
+    )),
+    footer = "— Automated PDE Script"
+  )
+  
+  smtp_send(
+    error_email,
+    from = "mjacob28@binghamton.edu",
+    to   = c("mjacob28@binghamton.edu","ewalsh@binghamton.edu", "bshabroski@binghamton.edu", "assess@binghamton.edu"),
+    subject = paste("❌ PDE SPRING 2026 Export Failed:", Sys.Date()),
+    credentials = creds_envvar(
+      host = Sys.getenv("SMTP_SERVER"),
+      user = Sys.getenv("SMTP_USER"),
+      pass_envvar = "SMTP_PASS",
+      port = 465,
+      use_ssl = TRUE
+    )
+  )
+  
+  stop("PDE pull failed — see pull_results")
+}
+
+summary_df <- PDE %>%
+  count(STUDENT_POPULATION_DESC, name = "Count") %>%
+  mutate(Percent = round(Count / sum(Count) * 100, 1)) %>%
+  arrange(desc(Count))
+
+summary_df <- bind_rows(
+  summary_df,
+  tibble(
+    STUDENT_POPULATION_DESC = "**Total**",
+    Count = sum(summary_df$Count),
+    Percent = 100
+  )
+)
+
+summary_html <- summary_df %>%
+  rename(Population = STUDENT_POPULATION_DESC) %>%
+  kable("html", escape = FALSE, align = "lrr", caption = "Student Population Breakdown") %>%
+  kable_styling("striped", full_width = FALSE)
+
+email <- compose_email(
+  body = html(paste0(
+    "<p>✅ PDE export completed successfully on ", Sys.Date(), ".</p>",
+    "<p><strong>Pin updated:</strong><br>", pin_path, "</p>",
+    summary_html,
+    "<p><strong>View Full Shiny App:</strong><br>Z:/Data Hub/PDE_APP_SP2026</p>"
+  )),
+  footer = "— Automated PDE Script"
+)
+
+smtp_send(
+  email,
+  from = "mjacob28@binghamton.edu",
+  to   = c("mjacob28@binghamton.edu", "ewalsh@binghamton.edu","bshabroski@binghamton.edu", "assess@binghamton.edu"),
+  subject = paste("✅ PDE SPRING 2026 Export Success:", Sys.Date()),
+  credentials = creds_envvar(
+    host = Sys.getenv("SMTP_SERVER"),
+    user = Sys.getenv("SMTP_USER"),
+    pass_envvar = "SMTP_PASS",
+    port = 465,
+    use_ssl = TRUE
+  )
+)
+
 
 # ---- Cleanup ----
 close(con)
